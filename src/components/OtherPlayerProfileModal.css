@@ -1,0 +1,272 @@
+.other-player-profile-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.7);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+  animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+.other-player-profile-modal {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 20px;
+  padding: 30px;
+  width: 90%;
+  max-width: 450px;
+  position: relative;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+  animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.other-player-profile-modal .close-button {
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: white;
+  font-size: 28px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s;
+  line-height: 1;
+  padding: 0;
+}
+
+.other-player-profile-modal .close-button:hover {
+  background: rgba(255, 255, 255, 0.3);
+  transform: rotate(90deg);
+}
+
+.other-player-profile-modal .profile-header {
+  text-align: center;
+  margin-bottom: 25px;
+}
+
+.other-player-profile-modal .profile-header h2 {
+  color: white;
+  font-size: 28px;
+  font-weight: bold;
+  margin: 0;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.other-player-profile-modal .profile-content {
+  display: flex;
+  flex-direction: column;
+  gap: 25px;
+}
+
+.other-player-profile-modal .avatar-section {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 20px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 15px;
+  backdrop-filter: blur(10px);
+}
+
+.other-player-profile-modal .user-info-section {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 15px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  backdrop-filter: blur(10px);
+}
+
+.other-player-profile-modal .info-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.other-player-profile-modal .info-item:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.other-player-profile-modal .info-label {
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.other-player-profile-modal .info-value {
+  color: white;
+  font-size: 16px;
+  font-weight: bold;
+  text-align: right;
+  max-width: 60%;
+  word-wrap: break-word;
+}
+
+.other-player-profile-modal .info-value.level {
+  color: #ffd700;
+  font-size: 18px;
+}
+
+.other-player-profile-modal .info-value.status-message {
+  font-style: italic;
+  font-weight: normal;
+  opacity: 0.9;
+}
+
+.other-player-profile-modal .action-buttons {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+
+.other-player-profile-modal .add-friend-button {
+  flex: 1;
+  padding: 14px 20px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  color: white;
+  font-size: 16px;
+  font-weight: bold;
+  border-radius: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.3s;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.other-player-profile-modal .add-friend-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+.other-player-profile-modal .add-friend-button:active {
+  transform: translateY(0);
+}
+
+.other-player-profile-modal .button-icon {
+  font-size: 18px;
+}
+
+/* 로딩 상태 */
+.other-player-profile-modal .loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  color: white;
+}
+
+.other-player-profile-modal .loading-spinner {
+  width: 50px;
+  height: 50px;
+  border: 4px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 20px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.other-player-profile-modal .loading-container p {
+  font-size: 16px;
+  font-weight: 500;
+}
+
+/* 에러 상태 */
+.other-player-profile-modal .error-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  color: white;
+}
+
+.other-player-profile-modal .error-message {
+  font-size: 16px;
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+.other-player-profile-modal .retry-button {
+  padding: 12px 24px;
+  background: rgba(255, 255, 255, 0.2);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  color: white;
+  font-size: 14px;
+  font-weight: bold;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.other-player-profile-modal .retry-button:hover {
+  background: rgba(255, 255, 255, 0.3);
+  transform: translateY(-2px);
+}
+
+/* 반응형 */
+@media (max-width: 768px) {
+  .other-player-profile-modal {
+    width: 95%;
+    padding: 20px;
+  }
+
+  .other-player-profile-modal .profile-header h2 {
+    font-size: 24px;
+  }
+
+  .other-player-profile-modal .info-value {
+    font-size: 14px;
+  }
+
+  .other-player-profile-modal .add-friend-button {
+    font-size: 14px;
+    padding: 12px 16px;
+  }
+}

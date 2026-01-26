@@ -1,0 +1,496 @@
+import React, { useState } from 'react';
+import './EventModal.css';
+import attendanceService from '../../../services/attendanceService';
+
+/**
+ * EventModal 컴포넌트
+ * - 이벤트 목록 및 상세 정보 표시
+ * - 탭 형식: 진행중 이벤트 / 업적 / 종료된 이벤트
+ * - 왼쪽: 목록, 오른쪽: 상세 내용
+ * - UI만 구현 (기능은 추후 추가)
+ */
+function EventModal({ onClose, shouldAutoAttendance = false, onAttendanceComplete, onCoinsUpdate }) {
+  const [activeTab, setActiveTab] = useState('ongoing'); // 'ongoing', 'achievements', or 'ended'
+  const [selectedItem, setSelectedItem] = useState(null); // 선택된 이벤트/업적
+
+  // 출석 체크 상태
+  const [dailyAttendance, setDailyAttendance] = useState([]); // 매일 출석 체크 (id: 3) - dayNumber 배열
+  const [eventAttendance, setEventAttendance] = useState([]); // 오픈 기념 출석 체크 (id: 1) - dayNumber 배열
+  const [isClaimingReward, setIsClaimingReward] = useState(false); // 보상 수령 중
+  const [currentClaimingDay, setCurrentClaimingDay] = useState(null); // 현재 수령 중인 날
+  const [isLoading, setIsLoading] = useState(true); // 데이터 로딩 중
+
+  // 플라자 패스 드래그 스크롤
+  const scrollRef = React.useRef(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [startX, setStartX] = useState(0);
+  const [scrollLeft, setScrollLeft] = useState(0);
+
+  const handleMouseDown = (e) => {
+    if (!scrollRef.current) return;
+    setIsDragging(true);
+    setStartX(e.pageX - scrollRef.current.offsetLeft);
+    setScrollLeft(scrollRef.current.scrollLeft);
+    scrollRef.current.style.cursor = 'grabbing';
+  };
+
+  const handleMouseMove = (e) => {
+    if (!isDragging || !scrollRef.current) return;
+    e.preventDefault();
+    const x = e.pageX - scrollRef.current.offsetLeft;
+    const walk = (x - startX) * 2;
+    scrollRef.current.scrollLeft = scrollLeft - walk;
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+    if (scrollRef.current) {
+      scrollRef.current.style.cursor = 'grab';
+    }
+  };
+
+  const handleMouseLeave = () => {
+    setIsDragging(false);
+    if (scrollRef.current) {
+      scrollRef.current.style.cursor = 'grab';
+    }
+  };
+
+  // 더미 데이터 (추후 서버에서 가져올 예정)
+  const ongoingEvents = [
+    {
+      id: 3,
+      title: '매일 출석 체크',
+      description: '매일 접속 시 보상 획득',
+      detailContent: '매일 접속하고 보상을 받아가세요!\n\n연속 출석 시 더 많은 보상을 받을 수 있습니다.\n\n7일 연속 출석: 골드 코인 50개\n30일 연속 출석: 골드 코인 200개',
+      startDate: '2025-12-01',
+      endDate: '2025-12-31',
+      image: '/resources/Icon/Event-icon.png',
+      status: 'ongoing',
+      rewards: ['일일 실버 코인 50개', '7일 골드 코인 50개', '30일 골드 코인 200개']
+    },
+    {
+      id: 1,
+      title: '오픈 기념 출석 체크',
+      description: '오픈 기념 특별 출석 보상',
+      detailContent: '메타플라자 오픈을 기념하여 특별 출석 보상을 드립니다!\n\n매일 접속하고 보상을 받아가세요!',
+      startDate: '2025-12-01',
+      endDate: '2025-12-31',
+      image: '/resources/Icon/Event-icon.png',
+      status: 'ongoing',
+      rewards: ['골드 코인 100개']
+    },
+    {
+      id: 2,
+      title: '플라자 패스',
+      description: '시즌 미션을 완료하고 특별 보상을 받으세요!',
+      detailContent: '플라자 패스를 통해 다양한 미션을 완료하고 풍성한 보상을 획득하세요.\n\n시즌 기간 동안 매일 새로운 미션이 제공되며, 미션을 완료할 때마다 경험치와 보상을 받을 수 있습니다.\n\n프리미엄 패스를 구매하면 추가 보상을 받을 수 있습니다!',
+      startDate: '2025-12-01',
+      endDate: '2025-12-31',
+      image: '/resources/Icon/Event-icon.png',
+      status: 'ongoing',
+      rewards: ['골드 코인', '실버 코인', '특별 스킨', '아이템']
+    }
+  ];
+
+  const achievements = [
+    {
+      id: 101,
+      title: '첫 걸음',
+      description: '첫 로그인 완료',
+      detailContent: '메타플라자에 첫 발을 내딛었습니다.\n\n보상: 실버 코인 100개',
+      image: '/resources/Icon/Event-icon.png',
+      progress: 100,
+      isCompleted: true,
+      rewards: ['실버 코인 100개']
+    },
+    {
+      id: 102,
+      title: '게임 마스터',
+      description: '미니게임 10회 클리어',
+      detailContent: '미니게임을 10회 클리어하세요.\n\n현재 진행도: 3/10\n\n보상: 골드 코인 50개',
+      image: '/resources/Icon/Event-icon.png',
+      progress: 30,
+      isCompleted: false,
+      rewards: ['골드 코인 50개']
+    },
+    {
+      id: 103,
+      title: '친구 만들기',
+      description: '친구 5명 추가',
+      detailContent: '친구 5명을 추가하세요.\n\n현재 진행도: 2/5\n\n보상: 실버 코인 500개',
+      image: '/resources/Icon/Event-icon.png',
+      progress: 40,
+      isCompleted: false,
+      rewards: ['실버 코인 500개']
+    }
+  ];
+
+  const endedEvents = [];
+
+  const getCurrentItems = () => {
+    if (activeTab === 'ongoing') return ongoingEvents;
+    if (activeTab === 'achievements') return achievements;
+    return endedEvents;
+  };
+
+  const currentItems = getCurrentItems();
+
+  // 출석 데이터 로드
+  React.useEffect(() => {
+    const loadAttendanceData = async () => {
+      try {
+        setIsLoading(true);
+        const dailyHistory = await attendanceService.getAttendanceHistory('DAILY');
+        const eventHistory = await attendanceService.getAttendanceHistory('EVENT');
+
+        // dayNumber 배열로 변환
+        setDailyAttendance(dailyHistory.map(a => a.dayNumber));
+        setEventAttendance(eventHistory.map(a => a.dayNumber));
+      } catch (error) {
+        console.error('Failed to load attendance data:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadAttendanceData();
+  }, []);
+
+  // 탭 변경 시 첫 번째 아이템 자동 선택
+  React.useEffect(() => {
+    if (currentItems.length > 0) {
+      setSelectedItem(currentItems[0]);
+    } else {
+      setSelectedItem(null);
+    }
+  }, [activeTab]);
+
+  // 자동 출석 체크 로직
+  React.useEffect(() => {
+    if (shouldAutoAttendance && !isClaimingReward && !isLoading) {
+      const performAutoAttendance = async () => {
+        setIsClaimingReward(true);
+
+        try {
+          // 1. 매일 출석 체크 (id: 3) 선택
+          const dailyEvent = ongoingEvents.find(e => e.id === 3);
+          if (dailyEvent) {
+            setSelectedItem(dailyEvent);
+
+            // 서버에 출석 체크 요청
+            await new Promise(resolve => setTimeout(resolve, 500));
+            const dailyResult = await attendanceService.claimAttendance('DAILY');
+
+            if (dailyResult.success) {
+              setCurrentClaimingDay(dailyResult.attendance.dayNumber);
+              await new Promise(resolve => setTimeout(resolve, 1000));
+
+              // 출석 기록 업데이트
+              setDailyAttendance(prev => [...prev, dailyResult.attendance.dayNumber]);
+
+              // 코인 업데이트
+              if (onCoinsUpdate) {
+                onCoinsUpdate(dailyResult.totalSilverCoins, dailyResult.totalGoldCoins);
+              }
+
+              await new Promise(resolve => setTimeout(resolve, 500));
+              setCurrentClaimingDay(null);
+            }
+          }
+
+          // 2. 오픈 기념 출석 체크 (id: 1) 선택
+          const eventEvent = ongoingEvents.find(e => e.id === 1);
+          // 오픈 기념 출석은 14일까지만 (이미 14일 완료했으면 스킵)
+          if (eventEvent && !eventAttendance.includes(14)) {
+            setSelectedItem(eventEvent);
+
+            // 서버에 출석 체크 요청
+            await new Promise(resolve => setTimeout(resolve, 500));
+            const eventResult = await attendanceService.claimAttendance('EVENT');
+
+            if (eventResult.success) {
+              setCurrentClaimingDay(eventResult.attendance.dayNumber);
+              await new Promise(resolve => setTimeout(resolve, 1000));
+
+              // 출석 기록 업데이트
+              setEventAttendance(prev => [...prev, eventResult.attendance.dayNumber]);
+
+              // 코인 업데이트
+              if (onCoinsUpdate) {
+                onCoinsUpdate(eventResult.totalSilverCoins, eventResult.totalGoldCoins);
+              }
+
+              await new Promise(resolve => setTimeout(resolve, 500));
+              setCurrentClaimingDay(null);
+            }
+          }
+        } catch (error) {
+          console.error('Failed to claim attendance:', error);
+        }
+
+        setIsClaimingReward(false);
+
+        // 출석 완료 콜백
+        if (onAttendanceComplete) {
+          onAttendanceComplete();
+        }
+      };
+
+      performAutoAttendance();
+    }
+  }, [shouldAutoAttendance, isLoading]);
+
+  return (
+    <div className="event-modal-overlay" onClick={onClose}>
+      <div className="event-modal-container" onClick={(e) => e.stopPropagation()}>
+        {/* 헤더 */}
+        <div className="event-modal-header">
+          <h2>🎉 이벤트</h2>
+          <button className="event-modal-close" onClick={onClose}>
+            ✕
+          </button>
+        </div>
+
+        {/* 탭 */}
+        <div className="event-modal-tabs">
+          <button
+            className={`event-tab ${activeTab === 'ongoing' ? 'active' : ''}`}
+            onClick={() => setActiveTab('ongoing')}
+          >
+            진행중 이벤트 ({ongoingEvents.length})
+          </button>
+          <button
+            className={`event-tab ${activeTab === 'achievements' ? 'active' : ''}`}
+            onClick={() => setActiveTab('achievements')}
+          >
+            업적 ({achievements.length})
+          </button>
+          <button
+            className={`event-tab ${activeTab === 'ended' ? 'active' : ''}`}
+            onClick={() => setActiveTab('ended')}
+          >
+            종료된 이벤트 ({endedEvents.length})
+          </button>
+        </div>
+
+        {/* 메인 컨텐츠: 왼쪽(목록) + 오른쪽(상세) */}
+        <div className="event-modal-body">
+          {/* 왼쪽: 목록 */}
+          <div className="event-list-section">
+            {currentItems.length === 0 ? (
+              <div className="event-empty">
+                <p>항목이 없습니다.</p>
+              </div>
+            ) : (
+              <div className="event-list">
+                {currentItems.map((item) => (
+                  <div
+                    key={item.id}
+                    className={`event-list-item ${selectedItem?.id === item.id ? 'selected' : ''}`}
+                    onClick={() => setSelectedItem(item)}
+                  >
+                    <div className="event-list-item-image">
+                      <img src={item.image} alt={item.title} />
+                    </div>
+                    <div className="event-list-item-info">
+                      <h4>{item.title}</h4>
+                      {/* 진행중 이벤트 탭이 아닐 때만 설명 표시 */}
+                      {activeTab !== 'ongoing' && <p>{item.description}</p>}
+                      {/* 업적의 경우 진행도 표시 */}
+                      {activeTab === 'achievements' && (
+                        <div className="achievement-progress">
+                          <div className="progress-bar">
+                            <div
+                              className="progress-fill"
+                              style={{ width: `${item.progress}%` }}
+                            />
+                          </div>
+                          <span className="progress-text">{item.progress}%</span>
+                        </div>
+                      )}
+                      {/* 이벤트의 경우 상태 뱃지 */}
+                      {activeTab !== 'achievements' && (
+                        <div className="event-list-item-badge">
+                          {item.status === 'ongoing' && <span className="badge ongoing">진행중</span>}
+                          {item.status === 'ended' && <span className="badge ended">종료</span>}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* 오른쪽: 상세 내용 */}
+          <div className="event-detail-section">
+            {selectedItem ? (
+              <>
+                <div className="event-detail-header">
+                  <img src={selectedItem.image} alt={selectedItem.title} />
+                  <h3>{selectedItem.title}</h3>
+                </div>
+                <div className="event-detail-content">
+                  {/* 플라자 패스의 경우 특별한 레이아웃 */}
+                  {selectedItem.id === 2 ? (
+                    <div className="plaza-pass-container">
+                      <div className="plaza-pass-header">
+                        <p className="detail-text">시즌 미션을 완료하고 특별 보상을 받으세요!</p>
+                        <div className="plaza-pass-info">
+                          {/* 패스 레벨 & 경험치 바 */}
+                          <div className="pass-level-container">
+                            <div className="pass-level-display">
+                              <span className="pass-level-label">패스 레벨</span>
+                              <span className="pass-level-value">1</span>
+                            </div>
+                            <div className="pass-exp-bar">
+                              <div className="pass-exp-fill" style={{ width: '0%' }}></div>
+                              <span className="pass-exp-text">0/100</span>
+                            </div>
+                          </div>
+                          {/* 버튼 그룹 */}
+                          <div className="plaza-pass-buttons">
+                            <button className="btn-daily-mission">일일 미션 확인</button>
+                            <button className="btn-premium-pass">프리미엄 패스 구매</button>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* 플라자 패스 테이블 */}
+                      <div
+                        className="plaza-pass-scroll"
+                        ref={scrollRef}
+                        onMouseDown={handleMouseDown}
+                        onMouseMove={handleMouseMove}
+                        onMouseUp={handleMouseUp}
+                        onMouseLeave={handleMouseLeave}
+                      >
+                        <div className="plaza-pass-table">
+                          {Array.from({ length: 30 }, (_, index) => (
+                            <div key={`column-${index}`} className="plaza-pass-column">
+                              {/* 숫자 셀 */}
+                              <div className="plaza-pass-cell number-cell">
+                                {index + 1}
+                              </div>
+                              {/* 두 번째 행: 빈 박스 */}
+                              <div className="plaza-pass-cell reward-cell">
+                                {/* 빈 박스 */}
+                              </div>
+                              {/* 세 번째 행: 잠금 박스 */}
+                              <div className="plaza-pass-cell reward-cell locked-cell">
+                                <span className="lock-icon">🔒</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  ) : (selectedItem.id === 3 || selectedItem.id === 1) ? (
+                    <div className="attendance-check-container">
+                      <p className="detail-text">{selectedItem.id === 3 ? '매일 접속하고 보상을 받아가세요!' : '메타플라자 오픈을 기념하여 특별 출석 보상을 드립니다!'}</p>
+
+                      {/* 출석 체크 그리드 (7x2) */}
+                      <div className="attendance-grid">
+                        {Array.from({ length: 14 }, (_, index) => {
+                          const day = index + 1;
+                          const isGoldDay = day === 7 || day === 14;
+                          const coinImage = isGoldDay
+                            ? '/resources/Icon/Gold-Coin.png'
+                            : '/resources/Icon/Silver-Coin.png';
+                          const coinAmount = isGoldDay
+                            ? (selectedItem.id === 1 ? '100' : '50')
+                            : (selectedItem.id === 1 ? '200' : '100');
+
+                          // 출석 체크 상태 확인
+                          const attendanceList = selectedItem.id === 3 ? dailyAttendance : eventAttendance;
+                          const isClaimed = attendanceList.includes(day);
+                          const isClaiming = currentClaimingDay === day;
+
+                          return (
+                            <div key={day} className={`attendance-box ${isGoldDay ? 'gold-box' : 'silver-box'} ${isClaimed ? 'claimed' : ''} ${isClaiming ? 'claiming' : ''}`}>
+                              <div className="attendance-day">Day {day}</div>
+                              <div className="attendance-reward">
+                                <img src={coinImage} alt="coin" className="coin-icon" />
+                                <span className={isGoldDay ? 'gold-text' : 'silver-text'}>
+                                  {coinAmount}
+                                </span>
+                              </div>
+                              {isClaimed && <div className="claimed-badge">✓</div>}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <p className="detail-text">{selectedItem.detailContent || selectedItem.description}</p>
+
+                      {/* 기간 표시 (업적 제외) */}
+                      {activeTab !== 'achievements' && selectedItem.startDate && (
+                        <div className="detail-date">
+                          <span>📅 {selectedItem.startDate} ~ {selectedItem.endDate}</span>
+                        </div>
+                      )}
+
+                      {/* 보상 표시 */}
+                      {selectedItem.rewards && selectedItem.rewards.length > 0 && (
+                        <div className="detail-rewards">
+                          <h4>🎁 보상</h4>
+                          <ul>
+                            {selectedItem.rewards.map((reward, index) => (
+                              <li key={index}>{reward}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  {/* 업적 진행도 */}
+                  {activeTab === 'achievements' && (
+                    <div className="detail-achievement-progress">
+                      <h4>진행도</h4>
+                      <div className="progress-bar-large">
+                        <div
+                          className="progress-fill"
+                          style={{ width: `${selectedItem.progress}%` }}
+                        />
+                      </div>
+                      <p className="progress-text-large">{selectedItem.progress}%</p>
+                      {selectedItem.isCompleted && (
+                        <div className="completed-badge">✅ 완료</div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* 버튼 */}
+                  <div className="detail-actions">
+                    {activeTab === 'ongoing' && selectedItem.id !== 3 && selectedItem.id !== 1 && selectedItem.id !== 2 && (
+                      <button className="btn-participate">참여하기</button>
+                    )}
+                    {activeTab === 'achievements' && !selectedItem.isCompleted && (
+                      <button className="btn-progress">진행중</button>
+                    )}
+                    {activeTab === 'achievements' && selectedItem.isCompleted && (
+                      <button className="btn-claim">보상 받기</button>
+                    )}
+                    {activeTab === 'ended' && (
+                      <button className="btn-ended" disabled>종료됨</button>
+                    )}
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="event-detail-empty">
+                <p>항목을 선택해주세요</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default EventModal;

@@ -1,0 +1,30 @@
+package com.community.repository;
+
+import com.community.model.PaymentHistory;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+import java.util.List;
+import java.util.Optional;
+
+@Repository
+public interface PaymentHistoryRepository extends JpaRepository<PaymentHistory, Long> {
+
+    Optional<PaymentHistory> findByOrderId(String orderId);
+
+    Optional<PaymentHistory> findByPaymentKey(String paymentKey);
+
+    List<PaymentHistory> findByUserIdOrderByCreatedAtDesc(Long userId);
+
+    List<PaymentHistory> findByUserIdAndStatusOrderByCreatedAtDesc(Long userId, PaymentHistory.PaymentStatus status);
+
+    List<PaymentHistory> findAllByOrderByCreatedAtDesc();
+
+    boolean existsByOrderId(String orderId);
+
+    // 통계용 쿼리
+    List<PaymentHistory> findAllByCreatedAtAfterAndStatus(java.time.LocalDateTime date, PaymentHistory.PaymentStatus status);
+
+    @org.springframework.data.jpa.repository.Query("SELECT SUM(p.amount) FROM PaymentHistory p WHERE p.status = :status")
+    Long sumAmountByStatus(@org.springframework.data.repository.query.Param("status") PaymentHistory.PaymentStatus status);
+}

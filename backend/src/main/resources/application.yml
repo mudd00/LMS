@@ -1,0 +1,82 @@
+spring:
+  application:
+    name: 3d-community-backend
+
+  # Lazy initialization으로 시작 시간 단축
+  main:
+    lazy-initialization: ${LAZY_INIT:true}
+
+  # 데이터베이스 설정 (PostgreSQL - Supabase Session Pooler)
+  datasource:
+    url: jdbc:postgresql://aws-1-ap-south-1.pooler.supabase.com:5432/postgres?sslmode=require&prepareThreshold=0
+    driver-class-name: org.postgresql.Driver
+    username: postgres.krnevmhwahnxiqvyrjeu
+    password: "!Q@W#E$R!"
+    hikari:
+      maximum-pool-size: 3
+      minimum-idle: 1
+      connection-timeout: 20000
+      idle-timeout: 300000
+      max-lifetime: 900000
+      leak-detection-threshold: 0
+
+  # JPA 설정
+  jpa:
+    hibernate:
+      ddl-auto: ${DB_DDL_AUTO:none}
+    show-sql: ${DB_SHOW_SQL:false}
+    open-in-view: true
+    properties:
+      hibernate:
+        format_sql: false
+        jdbc:
+          batch_size: 20
+        order_inserts: true
+        order_updates: true
+
+  # CORS 설정
+  web:
+    cors:
+      allowed-origins: ${CORS_ORIGINS:http://localhost:3000}
+      allowed-methods: GET,POST,PUT,DELETE,OPTIONS
+      allowed-headers: "*"
+      allow-credentials: true
+
+# 서버 포트
+server:
+  port: ${SERVER_PORT:8080}
+
+# JWT 설정
+jwt:
+  secret: ${JWT_SECRET:3d-community-secret-key-please-change-this-in-production-environment-for-security}
+  expiration: ${JWT_EXPIRATION:3600000} # 1시간 (밀리초)
+
+# 토스페이먼츠 설정
+toss:
+  payments:
+    secret-key: ${TOSS_SECRET_KEY:test_sk_d46qopOB8922kNGRa1Bg3ZmM75y0}
+    client-key: ${TOSS_CLIENT_KEY:test_ck_DnyRpQWGrNDQv6ZKaMPe3Kwv1M9E}
+    api-url: https://api.tosspayments.com/v1/payments
+
+# Actuator 설정 (Health Check)
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: always
+
+# 로깅 설정
+logging:
+  level:
+    root: WARN
+    com.community: ${LOG_LEVEL:INFO}
+    org.springframework.web: WARN
+    org.springframework.security: WARN
+    org.springframework.messaging: WARN
+    org.springframework.web.SimpLogging: WARN
+    org.hibernate: WARN
+    org.hibernate.SQL: WARN
+    com.zaxxer.hikari: WARN

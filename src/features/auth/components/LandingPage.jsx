@@ -1,0 +1,285 @@
+import React, { useState } from 'react';
+import './LandingPage.css';
+import authService from '../services/authService';
+
+function LandingPage({ onLoginSuccess }) {
+  const [showButtons, setShowButtons] = useState(false);
+  const [authMode, setAuthMode] = useState(null); // 'login' | 'register' | null
+  const [formData, setFormData] = useState({
+    email: '',
+    password: '',
+    nickname: '',
+    confirmPassword: ''
+  });
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [isUsernameChecked, setIsUsernameChecked] = useState(false);
+  const [usernameCheckMessage, setUsernameCheckMessage] = useState('');
+  const [isUsernameAvailable, setIsUsernameAvailable] = useState(false);
+
+  const handleClick = () => {
+    if (!showButtons && !authMode) {
+      setShowButtons(true);
+    }
+  };
+
+  const handleChange = (e) => {
+    setFormData({
+      ...formData,
+      [e.target.name]: e.target.value
+    });
+    setError('');
+
+    // 닉네임이 변경되면 중복 확인 초기화
+    if (e.target.name === 'nickname') {
+      setIsUsernameChecked(false);
+      setUsernameCheckMessage('');
+      setIsUsernameAvailable(false);
+    }
+  };
+
+  const handleCheckUsername = async () => {
+    if (!formData.nickname.trim()) {
+      setUsernameCheckMessage('닉네임을 입력하세요.');
+      return;
+    }
+
+    if (formData.nickname.length < 2 || formData.nickname.length > 20) {
+      setUsernameCheckMessage('닉네임은 2~20자 사이여야 합니다.');
+      return;
+    }
+
+    try {
+      const response = await authService.checkUsername(formData.nickname);
+      setIsUsernameChecked(true);
+      setIsUsernameAvailable(response.available);
+      setUsernameCheckMessage(response.message);
+    } catch (err) {
+      setUsernameCheckMessage('중복 확인 중 오류가 발생했습니다.');
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+
+    try {
+      if (authMode === 'login') {
+        const response = await authService.login({
+          email: formData.email,
+          password: formData.password
+        });
+
+        // 관리자인 경우 관리자 페이지로 리다이렉트
+        if (response.user.role === 'ROLE_DEVELOPER') {
+          window.location.href = '/admin';
+          return;
+        }
+
+        // 일반 사용자는 게임 화면으로
+        onLoginSuccess(response.user);
+      } else {
+        // 회원가입 시 닉네임 중복 확인 필수
+        if (!isUsernameChecked || !isUsernameAvailable) {
+          setError('닉네임 중복 확인을 해주세요.');
+          setLoading(false);
+          return;
+        }
+
+        if (formData.password !== formData.confirmPassword) {
+          setError('비밀번호가 일치하지 않습니다.');
+          setLoading(false);
+          return;
+        }
+        if (formData.password.length < 6) {
+          setError('비밀번호는 6자 이상이어야 합니다.');
+          setLoading(false);
+          return;
+        }
+        await authService.register({
+          email: formData.email,
+          password: formData.password,
+          username: formData.nickname
+        });
+        alert('회원가입이 완료되었습니다. 로그인해주세요.');
+        setAuthMode('login');
+        setFormData({ email: '', password: '', nickname: '', confirmPassword: '' });
+        setIsUsernameChecked(false);
+        setUsernameCheckMessage('');
+        setIsUsernameAvailable(false);
+      }
+    } catch (err) {
+      setError(err.response?.data?.message || '오류가 발생했습니다.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleBack = () => {
+    setAuthMode(null);
+    setFormData({ email: '', password: '', nickname: '', confirmPassword: '' });
+    setError('');
+    setIsUsernameChecked(false);
+    setUsernameCheckMessage('');
+    setIsUsernameAvailable(false);
+  };
+
+  return (
+    <div className="landing-overlay" onClick={handleClick}>
+      <div className={`landing-content ${authMode ? 'auth-active' : ''}`}>
+        {/* 로고 */}
+        <div className="logo-container">
+          <img src="/mainlogo.png" alt="MetaPlaza Logo" className="logo" />
+        </div>
+
+        {/* 버튼 표시 전: Click to Start */}
+        {!showButtons && !authMode && (
+          <div className="click-to-start">
+            <p className="start-text">Click to Start</p>
+          </div>
+        )}
+
+        {/* 버튼 표시 후: 로그인/회원가입 버튼 */}
+        {showButtons && !authMode && (
+          <div className="button-container">
+            <button
+              className="btn btn-primary"
+              onClick={(e) => {
+                e.stopPropagation();
+                setAuthMode('login');
+              }}
+            >
+              로그인
+            </button>
+            <button
+              className="btn btn-secondary"
+              onClick={(e) => {
+                e.stopPropagation();
+                setAuthMode('register');
+              }}
+            >
+              회원가입
+            </button>
+            <button
+              className="btn btn-developer"
+              onClick={(e) => {
+                e.stopPropagation();
+                // 로그인 없이 게임 실행
+                onLoginSuccess({
+                  id: 'dev_' + Date.now(),
+                  username: 'Developer',
+                  email: 'developer@local'
+                });
+              }}
+            >
+              🔧 개발자 모드
+            </button>
+          </div>
+        )}
+
+        {/* 인증 폼 */}
+        {authMode && (
+          <div className="auth-form-container" onClick={(e) => e.stopPropagation()}>
+            <button className="back-button" onClick={handleBack}>← 뒤로</button>
+
+            <h2 className="auth-title">
+              {authMode === 'login' ? '로그인' : '회원가입'}
+            </h2>
+
+            <form onSubmit={handleSubmit} className="auth-form">
+              {authMode === 'register' && (
+                <div className="form-group">
+                  <label>닉네임 (2~20자)</label>
+                  <div className="nickname-input-group">
+                    <input
+                      type="text"
+                      name="nickname"
+                      value={formData.nickname}
+                      onChange={handleChange}
+                      placeholder="닉네임을 입력하세요"
+                      required
+                      maxLength="20"
+                    />
+                    <button
+                      type="button"
+                      className="check-username-btn"
+                      onClick={handleCheckUsername}
+                    >
+                      중복 확인
+                    </button>
+                  </div>
+                  {usernameCheckMessage && (
+                    <div className={`username-check-message ${isUsernameAvailable ? 'success' : 'error'}`}>
+                      {usernameCheckMessage}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="form-group">
+                <label>이메일</label>
+                <input
+                  type="email"
+                  name="email"
+                  value={formData.email}
+                  onChange={handleChange}
+                  placeholder="이메일을 입력하세요"
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label>비밀번호</label>
+                <input
+                  type="password"
+                  name="password"
+                  value={formData.password}
+                  onChange={handleChange}
+                  placeholder="비밀번호를 입력하세요"
+                  required
+                />
+              </div>
+
+              {authMode === 'register' && (
+                <div className="form-group">
+                  <label>비밀번호 확인</label>
+                  <input
+                    type="password"
+                    name="confirmPassword"
+                    value={formData.confirmPassword}
+                    onChange={handleChange}
+                    placeholder="비밀번호를 다시 입력하세요"
+                    required
+                  />
+                </div>
+              )}
+
+              {error && <div className="auth-error">{error}</div>}
+
+              <button type="submit" className="auth-submit-btn" disabled={loading}>
+                {loading ? '처리 중...' : (authMode === 'login' ? '로그인' : '회원가입')}
+              </button>
+            </form>
+
+            <div className="auth-switch">
+              {authMode === 'login' ? (
+                <p>
+                  계정이 없으신가요?{' '}
+                  <button onClick={() => setAuthMode('register')}>회원가입</button>
+                </p>
+              ) : (
+                <p>
+                  이미 계정이 있으신가요?{' '}
+                  <button onClick={() => setAuthMode('login')}>로그인</button>
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default LandingPage;
