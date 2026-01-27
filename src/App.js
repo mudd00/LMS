@@ -68,6 +68,8 @@ function App() {
   const [showShopModal, setShowShopModal] = useState(false);
   const [showInventoryModal, setShowInventoryModal] = useState(false);
   const [showGoldChargeModal, setShowGoldChargeModal] = useState(false);
+  const [showWhiteboardPopup, setShowWhiteboardPopup] = useState(false); // 판서 컨트롤러 팝업
+  const [showWhiteboardButton, setShowWhiteboardButton] = useState(false); // 판서 버튼 표시 (칠판 근처)
   const [goldChargeModalTab, setGoldChargeModalTab] = useState('charge'); // 'charge' | 'exchange'
   const [shouldAutoAttendance, setShouldAutoAttendance] = useState(false);
   const [showPhoneUI, setShowPhoneUI] = useState(false);
@@ -805,6 +807,17 @@ function App() {
     setShowGameIcon(false);
   };
 
+  // 칠판 트리거 진입/이탈 핸들러
+  const handleWhiteboardTriggerEnter = () => {
+    console.log('🎨 칠판 트리거 진입! 판서 버튼 표시');
+    setShowWhiteboardButton(true);
+  };
+
+  const handleWhiteboardTriggerExit = () => {
+    console.log('🎨 칠판 트리거 이탈! 판서 버튼 숨김');
+    setShowWhiteboardButton(false);
+  };
+
   // 미니게임 아이콘 클릭 핸들러
   const handleGameIconClick = () => {
     console.log('🎮 미니게임 로비 아이콘 클릭');
@@ -1146,6 +1159,18 @@ function App() {
         </div>
       )}
 
+      {/* 판서 컨트롤러 버튼 (칠판 근처에서만 표시) */}
+      {isLoggedIn && !isMapFull && showWhiteboardButton && (
+        <button
+          className="whiteboard-button"
+          onClick={() => setShowWhiteboardPopup(true)}
+          title="판서 컨트롤러"
+        >
+          <span className="whiteboard-button-icon">✏️</span>
+          <span className="whiteboard-button-text">판서</span>
+        </button>
+      )}
+
       {/* Token warning if user opens map but token missing */}
       {isMapFull && !mapboxToken && (
         <div className="map-token-warning">Mapbox token not set. Fill `REACT_APP_MAPBOX_TOKEN` in your `.env`.</div>
@@ -1256,6 +1281,8 @@ function App() {
                   mainCameraRef={mainCameraRef}
                   onGameTriggerEnter={handleGameTriggerEnter}
                   onGameTriggerExit={handleGameTriggerExit}
+                  onWhiteboardTriggerEnter={handleWhiteboardTriggerEnter}
+                  onWhiteboardTriggerExit={handleWhiteboardTriggerExit}
                 />
               )}
             </Physics>
@@ -1477,6 +1504,44 @@ function App() {
         <div className="character-loading-overlay">
           <div className="loading-spinner"></div>
           <div className="loading-text">Changing Avatar...</div>
+        </div>
+      )}
+
+      {/* 판서 컨트롤러 팝업 */}
+      {showWhiteboardPopup && (
+        <div className="whiteboard-popup-overlay" onClick={() => setShowWhiteboardPopup(false)}>
+          <div className="whiteboard-popup" onClick={(e) => e.stopPropagation()}>
+            <div className="whiteboard-popup-header">
+              <h3>판서 컨트롤러</h3>
+              <button className="whiteboard-popup-close" onClick={() => setShowWhiteboardPopup(false)}>×</button>
+            </div>
+            <div className="whiteboard-popup-content">
+              <p>태블릿이나 스마트폰에서 아래 링크로 접속하여 칠판에 판서할 수 있습니다.</p>
+              <div className="whiteboard-link-container">
+                <input
+                  type="text"
+                  readOnly
+                  value={`${window.location.origin}/whiteboard`}
+                  className="whiteboard-link-input"
+                />
+                <button
+                  className="whiteboard-copy-btn"
+                  onClick={() => {
+                    navigator.clipboard.writeText(`${window.location.origin}/whiteboard`);
+                    setNotification({ message: '링크가 복사되었습니다!', type: 'success' });
+                  }}
+                >
+                  복사
+                </button>
+              </div>
+              <button
+                className="whiteboard-open-btn"
+                onClick={() => window.open('/whiteboard', '_blank', 'width=800,height=600')}
+              >
+                새 창에서 열기
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

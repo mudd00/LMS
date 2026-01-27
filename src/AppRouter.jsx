@@ -14,6 +14,7 @@ import { ShopManagement } from './features/shop';
 import ProtectedRoute from './components/ProtectedRoute';
 import MinigameSelectPage from './pages/MinigameSelectPage';
 import MapGamePageNew from './pages/MapGamePageNew';
+import WhiteboardController from './pages/WhiteboardController';
 import PaymentCheckout from './features/payment/components/PaymentCheckout';
 import PaymentCallback from './features/payment/components/PaymentCallback';
 import Statistics from './pages/admin/Statistics';
@@ -68,15 +69,18 @@ function AppRouter() {
         </Route>
 
         <Route path="/minigame-select" element={<MinigameSelectPage />} />
-        <Route 
-          path="/map-game" 
+        <Route
+          path="/map-game"
           element={
-            <MapGamePageNew 
+            <MapGamePageNew
               onShowCreateRoom={handleShowCreateRoom}
               onShowLobby={handleShowLobby}
             />
-          } 
+          }
         />
+
+        {/* 판서 컨트롤러 (태블릿/폰용) */}
+        <Route path="/whiteboard" element={<WhiteboardController />} />
 
         {/* 결제 위젯 팝업용 경로 */}
         <Route path="/payment/checkout" element={<PaymentCheckout />} />
