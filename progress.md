@@ -6,6 +6,36 @@
 
 ## 완료된 작업
 
+### 0. 의자/교탁 상호작용 기능 (2025-01-28 추가)
+
+**구현 파일:**
+- `src/components/education/InteractiveObject.jsx` - 상호작용 센서 컴포넌트
+- `src/components/character/Character.jsx` - `sit()`, `stand()`, `isSitting()` 메서드 추가
+- `src/components/map/EducationZone.jsx` - 의자/교탁에 InteractiveObject 배치
+- `src/App.js` - F키 핸들러, 역할 기반 제한
+- `src/App.css` - 상호작용 프롬프트 UI
+
+**기능:**
+- 의자 근처 접근 시: `[F] 의자에 앉기 (학생 전용)` UI 표시
+- 교탁 근처 접근 시: `[F] 교탁에 서기 (강사 전용)` UI 표시
+- F키로 앉기/서기 실행
+- 앉은 상태에서 F키로 일어서기
+- 역할 기반 제한 (`userRole`: 'student' | 'instructor')
+- 앉은 상태에서는 이동 불가 (물리 kinematic 전환)
+
+**InteractiveObject Props:**
+| Prop | 타입 | 설명 |
+|------|------|------|
+| position | [x,y,z] | 센서 위치 |
+| sittingPosition | [x,y,z] | 실제 앉는 위치 |
+| size | [w,h,d] | 센서 크기 |
+| objectId | string | 고유 ID |
+| label | string | UI 텍스트 |
+| type | 'sit' \| 'stand' | 의자/교탁 구분 |
+| allowedRole | 'student' \| 'instructor' \| 'all' | 허용 역할 |
+
+---
+
 ### 1. 교육 체험존 (Education Zone) 구축
 
 **위치**: `[84.78, 0.39, -93.63]` (맵 내 빈 공간)
@@ -116,9 +146,11 @@ public/resources/GameView/
 ### 우선순위 중간
 
 4. **VerseUp 추가 기능 이식**
-   - VerseUp의 다른 교육 기능 확인 및 구현
-   - 화면 공유 기능
-   - 교육 콘텐츠 표시
+   - ~~의자/교탁 상호작용~~ ✅ (2025-01-28 완료)
+   - 화면 공유 기능 (강사 → 학생)
+   - 음성 채팅 기능
+   - 포탈 시스템 (맵 이동)
+   - 문 시스템 (강의실 입장/권한)
 
 5. **판서 컨트롤러 개선**
    - 그리기 취소/다시하기 (Undo/Redo)

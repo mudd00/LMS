@@ -41,6 +41,9 @@ function Character({ characterRef, initialPosition, isMovementDisabled, username
 
   const { forward, backward, left, right, shift, space, q } = useKeyboardControls();
   const [currentAnimation, setCurrentAnimation] = useState('none');
+  const [isSitting, setIsSitting] = useState(false); // 앉기 상태
+  const sittingPositionRef = useRef(null); // 앉은 위치
+  const sittingRotationRef = useRef(null); // 앉은 방향
 
   // modelPath 변경 감지
   useEffect(() => {
@@ -128,11 +131,13 @@ function Character({ characterRef, initialPosition, isMovementDisabled, username
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // characterRef에 텔레포트 메서드 노출 (기존 Three.js 메서드 유지)
+  // characterRef에 텔레포트/앉기/서기 메서드 노출 (기존 Three.js 메서드 유지)
   useEffect(() => {
     if (characterRef?.current && rigidBodyRef.current && modelGroupRef.current) {
       // 기존 THREE.Object3D에 속성 추가 (덮어쓰지 않음)
       characterRef.current.rigidBody = rigidBodyRef;
+
+      // 텔레포트 메서드
       characterRef.current.teleportTo = (position) => {
         if (rigidBodyRef.current && modelGroupRef.current) {
           const [x, y, z] = position;
@@ -151,8 +156,80 @@ function Character({ characterRef, initialPosition, isMovementDisabled, username
           console.log('✅ 텔레포트 완료:', position);
         }
       };
+
+      // 앉기 메서드
+      characterRef.current.sit = (position, type) => {
+        if (!rigidBodyRef.current) return;
+
+        setIsSitting(true);
+        sittingPositionRef.current = position;
+
+        // type에 따라 바라보는 방향 설정
+        let targetRotation;
+        if (type === 'sit') {
+          // 의자: 180도 회전 (칠판 바라보기)
+          targetRotation = new THREE.Quaternion().setFromAxisAngle(
+            new THREE.Vector3(0, 1, 0),
+            Math.PI // 180도
+          );
+        } else if (type === 'stand') {
+          // 교탁: 0도 (학생들 바라보기)
+          targetRotation = new THREE.Quaternion().setFromAxisAngle(
+            new THREE.Vector3(0, 1, 0),
+            0 // 0도
+          );
+        } else {
+          // 기본: 현재 회전 유지
+          targetRotation = currentRotationRef.current.clone();
+        }
+
+        sittingRotationRef.current = targetRotation;
+        currentRotationRef.current.copy(targetRotation);
+
+        // RigidBody를 kinematic으로 변경 (물리 충돌 무시)
+        rigidBodyRef.current.setBodyType(1, true); // 1 = KinematicPositionBased
+
+        // 앉는 위치로 텔레포트
+        rigidBodyRef.current.setTranslation({ x: position[0], y: position[1], z: position[2] }, true);
+        rigidBodyRef.current.setRotation(
+          { x: targetRotation.x, y: targetRotation.y, z: targetRotation.z, w: targetRotation.w },
+          true
+        );
+        rigidBodyRef.current.setLinvel({ x: 0, y: 0, z: 0 }, true);
+        rigidBodyRef.current.setAngvel({ x: 0, y: 0, z: 0 }, true);
+
+        // 모델 동기화
+        modelGroupRef.current.position.set(position[0], position[1], position[2]);
+        modelGroupRef.current.quaternion.copy(targetRotation);
+
+        console.log(`💺 ${type === 'sit' ? '앉기' : '서기'} 활성화:`, position);
+      };
+
+      // 일어서기 메서드
+      characterRef.current.stand = () => {
+        if (!rigidBodyRef.current) return;
+
+        // 의자 옆으로 이동 (끼지 않도록)
+        const currentPos = rigidBodyRef.current.translation();
+        rigidBodyRef.current.setTranslation(
+          { x: currentPos.x + 2, y: currentPos.y, z: currentPos.z }, // 옆으로 2 이동
+          true
+        );
+
+        // RigidBody를 다시 dynamic으로 변경
+        rigidBodyRef.current.setBodyType(0, true); // 0 = Dynamic
+
+        setIsSitting(false);
+        sittingPositionRef.current = null;
+        sittingRotationRef.current = null;
+
+        console.log('🚶 일어서기 완료');
+      };
+
+      // 상태 확인 메서드
+      characterRef.current.isSitting = () => isSitting;
     }
-  }, [characterRef, rigidBodyRef.current, modelGroupRef.current]);
+  }, [characterRef, rigidBodyRef.current, modelGroupRef.current, isSitting]);
 
   // initialPosition이 변경되면 RigidBody 위치 업데이트 (지도 모드에서는 제외)
   useEffect(() => {
@@ -212,7 +289,11 @@ function Character({ characterRef, initialPosition, isMovementDisabled, username
     if (isJumpingRef.current) return;
 
     let animToPlay = 'Idle';
-    if (forward || backward || left || right) {
+
+    // 앉아있을 때는 SitDown 애니메이션
+    if (isSitting) {
+      animToPlay = 'SitDown';
+    } else if (forward || backward || left || right) {
       animToPlay = shift ? 'Run' : 'Walk';
     }
 
@@ -220,8 +301,21 @@ function Character({ characterRef, initialPosition, isMovementDisabled, username
       const oldAction = actions[currentAnimation];
       const newAction = actions[animToPlay];
 
-      if (oldAction) oldAction.fadeOut(0.5);
-      if (newAction) newAction.reset().fadeIn(0.5).play();
+      if (oldAction) oldAction.fadeOut(0.3);
+
+      if (newAction) {
+        newAction.reset();
+
+        // SitDown 애니메이션은 한 번만 재생하고 마지막 프레임에서 멈춤
+        if (animToPlay === 'SitDown') {
+          newAction.setLoop(THREE.LoopOnce, 1);
+          newAction.clampWhenFinished = true;
+        } else {
+          newAction.setLoop(THREE.LoopRepeat);
+        }
+
+        newAction.fadeIn(0.3).play();
+      }
 
       setCurrentAnimation(animToPlay);
 
@@ -231,7 +325,7 @@ function Character({ characterRef, initialPosition, isMovementDisabled, username
         stepIntervalRef.current = animToPlay === 'Run' ? 0.45 : 0.6; // 더 빠른 발걸음 간격
       }
     }
-  }, [forward, backward, left, right, shift, actions, currentAnimation]);
+  }, [forward, backward, left, right, shift, actions, currentAnimation, isSitting]);
 
   useFrame((state, delta) => {
     if (!rigidBodyRef.current || !modelGroupRef.current) return;
@@ -251,6 +345,30 @@ function Character({ characterRef, initialPosition, isMovementDisabled, username
     if (isMovementDisabled) {
       // 속도를 0으로 설정하여 정지
       rigidBodyRef.current.setLinvel({ x: 0, y: rigidBodyRef.current.linvel().y, z: 0 }, true);
+      return;
+    }
+
+    // 앉아있을 때는 이동 불가, 위치 및 회전 고정
+    if (isSitting && sittingPositionRef.current && sittingRotationRef.current) {
+      rigidBodyRef.current.setLinvel({ x: 0, y: 0, z: 0 }, true);
+      rigidBodyRef.current.setAngvel({ x: 0, y: 0, z: 0 }, true);
+      rigidBodyRef.current.setTranslation(
+        { x: sittingPositionRef.current[0], y: sittingPositionRef.current[1], z: sittingPositionRef.current[2] },
+        true
+      );
+      rigidBodyRef.current.setRotation(
+        { x: sittingRotationRef.current.x, y: sittingRotationRef.current.y, z: sittingRotationRef.current.z, w: sittingRotationRef.current.w },
+        true
+      );
+
+      // 모델 동기화
+      modelGroupRef.current.position.set(sittingPositionRef.current[0], sittingPositionRef.current[1], sittingPositionRef.current[2]);
+      modelGroupRef.current.quaternion.copy(sittingRotationRef.current);
+
+      // 위치 업데이트 콜백
+      if (onPositionUpdate) {
+        onPositionUpdate(sittingPositionRef.current);
+      }
       return;
     }
 

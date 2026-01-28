@@ -3,6 +3,7 @@ import { useGLTF } from '@react-three/drei';
 import { RigidBody, CuboidCollider } from '@react-three/rapier';
 import * as THREE from 'three';
 import Blackboard from '../education/Blackboard';
+import InteractiveObject from '../education/InteractiveObject';
 
 /**
  * EducationZone 컴포넌트
@@ -20,7 +21,7 @@ const ZONE_CENTER = [84.78, 0.39, -93.63];
 // classroom.glb에서 가져올 오브젝트 (교탁만)
 const OBJECTS_TO_LOAD = ['BASE_PROF'];
 
-function EducationZone({ position = ZONE_CENTER, onBlackboardReady, onWhiteboardEnter, onWhiteboardExit }) {
+function EducationZone({ position = ZONE_CENTER, onBlackboardReady, onWhiteboardEnter, onWhiteboardExit, onInteractionChange }) {
   const { scene: classroomScene } = useGLTF('/resources/GameView/classroom.glb');
   const { scene: deskScene } = useGLTF('/resources/GameView/single_desk.glb');
   const loggedRef = useRef(false);
@@ -168,6 +169,30 @@ function EducationZone({ position = ZONE_CENTER, onBlackboardReady, onWhiteboard
           }}
         />
       </RigidBody>
+
+      {/* 의자 상호작용 영역 (학생만 앉을 수 있음) */}
+      <InteractiveObject
+        position={[deskPosition[0], deskPosition[1] + 1, deskPosition[2] + 1]}
+        sittingPosition={[deskPosition[0], deskPosition[1] + 2, deskPosition[2] - 0.5]}
+        size={[3, 2, 3]}
+        objectId="edu-chair-1"
+        label="의자에 앉기"
+        type="sit"
+        allowedRole="student"
+        onNearChange={onInteractionChange}
+      />
+
+      {/* 교탁 상호작용 영역 (테스트: 모든 역할 허용) */}
+      <InteractiveObject
+        position={[position[0] + 26, position[1] + 1, position[2] - 8]}
+        sittingPosition={[position[0] + 26, position[1] + 1, position[2] - 4]}
+        size={[6, 3, 6]}
+        objectId="edu-podium"
+        label="교탁에 서기"
+        type="stand"
+        allowedRole="all"
+        onNearChange={onInteractionChange}
+      />
     </group>
   );
 }

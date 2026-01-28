@@ -10,7 +10,7 @@ import EducationZone from './EducationZone';
  * - Sky + Level1Map 결합
  * - GameIconTrigger 포함 (cliff_block_rock002 위치)
  */
-function Level1({ characterRef, mainCameraRef, onGameTriggerEnter, onGameTriggerExit, onWhiteboardTriggerEnter, onWhiteboardTriggerExit }) {
+function Level1({ characterRef, mainCameraRef, onGameTriggerEnter, onGameTriggerExit, onWhiteboardTriggerEnter, onWhiteboardTriggerExit, onInteractionChange }) {
   const [cliffBlockInfo, setCliffBlockInfo] = useState(null);
 
   // Level1Map에서 cliff_block_rock002 위치를 받아옴
@@ -40,6 +40,7 @@ function Level1({ characterRef, mainCameraRef, onGameTriggerEnter, onGameTrigger
       <EducationZone
         onWhiteboardEnter={onWhiteboardTriggerEnter}
         onWhiteboardExit={onWhiteboardTriggerExit}
+        onInteractionChange={onInteractionChange}
       />
 
       {/* Game Icon Trigger - cliff_block_rock002 위치에 동적으로 배치 */}

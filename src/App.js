@@ -70,6 +70,8 @@ function App() {
   const [showGoldChargeModal, setShowGoldChargeModal] = useState(false);
   const [showWhiteboardPopup, setShowWhiteboardPopup] = useState(false); // 판서 컨트롤러 팝업
   const [showWhiteboardButton, setShowWhiteboardButton] = useState(false); // 판서 버튼 표시 (칠판 근처)
+  const [nearInteraction, setNearInteraction] = useState(null); // 근처 상호작용 가능 오브젝트 정보
+  const [userRole, setUserRole] = useState('student'); // 사용자 역할 'student' | 'instructor' | 'admin'
   const [goldChargeModalTab, setGoldChargeModalTab] = useState('charge'); // 'charge' | 'exchange'
   const [shouldAutoAttendance, setShouldAutoAttendance] = useState(false);
   const [showPhoneUI, setShowPhoneUI] = useState(false);
@@ -327,6 +329,15 @@ function App() {
     setUsername(user.username || 'Guest');
     setUserId(user.id || String(Date.now()));
     setUserProfile(user); // 프로필 정보 저장 (selectedProfile, selectedOutline 포함)
+
+    // 역할 설정 (ROLE_DEVELOPER = instructor, 그 외 = student)
+    if (user.role === 'ROLE_DEVELOPER') {
+      setUserRole('instructor');
+      console.log('👨‍🏫 강사 역할로 로그인');
+    } else {
+      setUserRole('student');
+      console.log('👨‍🎓 학생 역할로 로그인');
+    }
 
     // 오늘 출석 체크 여부 확인
     const bothAttended = await attendanceService.checkBothAttendedToday();
@@ -818,6 +829,57 @@ function App() {
     setShowWhiteboardButton(false);
   };
 
+  // 상호작용 가능 오브젝트 진입/이탈 핸들러
+  const handleInteractionChange = (data) => {
+    if (data.isNear) {
+      console.log(`🎯 상호작용 가능: ${data.label} (허용 역할: ${data.allowedRole})`);
+      setNearInteraction(data);
+    } else {
+      console.log('🎯 상호작용 영역 이탈');
+      setNearInteraction(null);
+    }
+  };
+
+  // 상호작용 실행 (F키)
+  const handleInteract = () => {
+    if (!characterRef.current) return;
+
+    // 이미 앉아있으면 일어서기 (nearInteraction 없어도 가능)
+    if (characterRef.current.isSitting && characterRef.current.isSitting()) {
+      characterRef.current.stand();
+      return;
+    }
+
+    // 앉기는 nearInteraction이 있어야 함
+    if (!nearInteraction) return;
+
+    const { type, position, allowedRole } = nearInteraction;
+
+    // 역할 확인
+    if (allowedRole !== 'all' && allowedRole !== userRole) {
+      const roleText = allowedRole === 'student' ? '학생' : '강사';
+      setNotification({ message: `${roleText}만 사용할 수 있습니다.`, type: 'error' });
+      return;
+    }
+
+    // 앉기/서기
+    characterRef.current.sit(position, type);
+  };
+
+  // F키 이벤트 리스너
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'f' || e.key === 'F') {
+        // 채팅 입력 중이거나 모달이 열려있으면 무시
+        if (isChatInputFocused || showBoardModal || showProfileModal || showSettingModal) return;
+        handleInteract();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [nearInteraction, userRole, isChatInputFocused, showBoardModal, showProfileModal, showSettingModal]);
+
   // 미니게임 아이콘 클릭 핸들러
   const handleGameIconClick = () => {
     console.log('🎮 미니게임 로비 아이콘 클릭');
@@ -990,6 +1052,15 @@ function App() {
             setUsername(validUser.username || 'Guest');
             setUserId(validUser.id || String(Date.now()));
             setUserProfile(validUser);
+
+            // 역할 설정 (ROLE_DEVELOPER = instructor, 그 외 = student)
+            if (validUser.role === 'ROLE_DEVELOPER') {
+              setUserRole('instructor');
+              console.log('👨‍🏫 강사 역할로 자동 로그인');
+            } else {
+              setUserRole('student');
+              console.log('👨‍🎓 학생 역할로 자동 로그인');
+            }
 
             // 재화 정보 로드
             return Promise.all([
@@ -1171,6 +1242,21 @@ function App() {
         </button>
       )}
 
+      {/* 상호작용 프롬프트 (의자/교탁 근처에서 F키) */}
+      {isLoggedIn && !isMapFull && (nearInteraction || characterRef.current?.isSitting?.()) && (
+        <div className="interaction-prompt">
+          <div className="interaction-prompt-key">F</div>
+          <div className="interaction-prompt-text">
+            {characterRef.current?.isSitting?.() ? '일어서기' : nearInteraction?.label}
+            {nearInteraction && !characterRef.current?.isSitting?.() && nearInteraction.allowedRole !== 'all' && nearInteraction.allowedRole !== userRole && (
+              <span className="interaction-prompt-role">
+                ({nearInteraction.allowedRole === 'student' ? '학생 전용' : '강사 전용'})
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Token warning if user opens map but token missing */}
       {isMapFull && !mapboxToken && (
         <div className="map-token-warning">Mapbox token not set. Fill `REACT_APP_MAPBOX_TOKEN` in your `.env`.</div>
@@ -1283,6 +1369,7 @@ function App() {
                   onGameTriggerExit={handleGameTriggerExit}
                   onWhiteboardTriggerEnter={handleWhiteboardTriggerEnter}
                   onWhiteboardTriggerExit={handleWhiteboardTriggerExit}
+                  onInteractionChange={handleInteractionChange}
                 />
               )}
             </Physics>
