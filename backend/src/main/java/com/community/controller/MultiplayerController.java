@@ -200,4 +200,145 @@ public class MultiplayerController {
         log.info("개인 룸 채팅: roomId={}, userId={}, message={}", chatDto.getRoomId(), chatDto.getUserId(), chatDto.getMessage());
         messagingTemplate.convertAndSend("/topic/room/" + chatDto.getRoomId() + "/chat", chatDto);
     }
+
+    // ==================== 화면 공유 시그널링 ====================
+
+    /**
+     * 화면 공유 시작
+     * Client -> /app/screenshare.start
+     * Server -> /topic/screenshare/broadcast (to all)
+     */
+    @MessageMapping("/screenshare.start")
+    public void startScreenShare(java.util.Map<String, Object> data) {
+        String instructorId = (String) data.get("instructorId");
+        log.info("화면 공유 시작: instructorId={}", instructorId);
+
+        java.util.Map<String, Object> broadcast = new java.util.HashMap<>();
+        broadcast.put("action", "start");
+        broadcast.put("instructorId", instructorId);
+        broadcast.put("timestamp", System.currentTimeMillis());
+
+        messagingTemplate.convertAndSend("/topic/screenshare/broadcast", broadcast);
+    }
+
+    /**
+     * 화면 공유 종료
+     * Client -> /app/screenshare.stop
+     * Server -> /topic/screenshare/broadcast (to all)
+     */
+    @MessageMapping("/screenshare.stop")
+    public void stopScreenShare(java.util.Map<String, Object> data) {
+        String instructorId = (String) data.get("instructorId");
+        log.info("화면 공유 종료: instructorId={}", instructorId);
+
+        java.util.Map<String, Object> broadcast = new java.util.HashMap<>();
+        broadcast.put("action", "stop");
+        broadcast.put("instructorId", instructorId);
+        broadcast.put("timestamp", System.currentTimeMillis());
+
+        messagingTemplate.convertAndSend("/topic/screenshare/broadcast", broadcast);
+    }
+
+    /**
+     * 학생 화면 공유 시청 요청
+     * Client -> /app/screenshare.join
+     * Server -> /topic/screenshare/instructor/{instructorId} (to instructor)
+     */
+    @MessageMapping("/screenshare.join")
+    public void joinScreenShare(java.util.Map<String, Object> data) {
+        String studentId = (String) data.get("studentId");
+        String instructorId = (String) data.get("instructorId");
+        log.info("화면 공유 시청 요청: studentId={}, instructorId={}", studentId, instructorId);
+
+        java.util.Map<String, Object> message = new java.util.HashMap<>();
+        message.put("type", "join");
+        message.put("studentId", studentId);
+        message.put("timestamp", System.currentTimeMillis());
+
+        messagingTemplate.convertAndSend("/topic/screenshare/instructor/" + instructorId, message);
+    }
+
+    /**
+     * 학생 화면 공유 시청 종료
+     * Client -> /app/screenshare.leave
+     * Server -> /topic/screenshare/instructor/{instructorId} (to instructor)
+     */
+    @MessageMapping("/screenshare.leave")
+    public void leaveScreenShare(java.util.Map<String, Object> data) {
+        String studentId = (String) data.get("studentId");
+        String instructorId = (String) data.get("instructorId");
+        log.info("화면 공유 시청 종료: studentId={}, instructorId={}", studentId, instructorId);
+
+        java.util.Map<String, Object> message = new java.util.HashMap<>();
+        message.put("type", "leave");
+        message.put("studentId", studentId);
+        message.put("timestamp", System.currentTimeMillis());
+
+        messagingTemplate.convertAndSend("/topic/screenshare/instructor/" + instructorId, message);
+    }
+
+    /**
+     * WebRTC Offer 전송 (강사 -> 학생)
+     * Client -> /app/screenshare.offer
+     * Server -> /topic/screenshare/student/{studentId} (to student)
+     */
+    @MessageMapping("/screenshare.offer")
+    public void sendOffer(java.util.Map<String, Object> data) {
+        String from = (String) data.get("from");
+        String to = (String) data.get("to");
+        Object offer = data.get("offer");
+        log.info("WebRTC Offer 전송: from={}, to={}", from, to);
+
+        java.util.Map<String, Object> message = new java.util.HashMap<>();
+        message.put("type", "offer");
+        message.put("offer", offer);
+        message.put("from", from);
+        message.put("timestamp", System.currentTimeMillis());
+
+        messagingTemplate.convertAndSend("/topic/screenshare/student/" + to, message);
+    }
+
+    /**
+     * WebRTC Answer 전송 (학생 -> 강사)
+     * Client -> /app/screenshare.answer
+     * Server -> /topic/screenshare/instructor/{instructorId} (to instructor)
+     */
+    @MessageMapping("/screenshare.answer")
+    public void sendAnswer(java.util.Map<String, Object> data) {
+        String studentId = (String) data.get("studentId");
+        String instructorId = (String) data.get("instructorId");
+        Object answer = data.get("answer");
+        log.info("WebRTC Answer 전송: studentId={}, instructorId={}", studentId, instructorId);
+
+        java.util.Map<String, Object> message = new java.util.HashMap<>();
+        message.put("type", "answer");
+        message.put("answer", answer);
+        message.put("studentId", studentId);
+        message.put("timestamp", System.currentTimeMillis());
+
+        messagingTemplate.convertAndSend("/topic/screenshare/instructor/" + instructorId, message);
+    }
+
+    /**
+     * WebRTC ICE Candidate 전송
+     * Client -> /app/screenshare.ice
+     * Server -> /topic/screenshare/student/{to} or /topic/screenshare/instructor/{to}
+     */
+    @MessageMapping("/screenshare.ice")
+    public void sendIceCandidate(java.util.Map<String, Object> data) {
+        String from = (String) data.get("from");
+        String to = (String) data.get("to");
+        Object candidate = data.get("candidate");
+        log.debug("WebRTC ICE Candidate 전송: from={}, to={}", from, to);
+
+        java.util.Map<String, Object> message = new java.util.HashMap<>();
+        message.put("type", "ice");
+        message.put("candidate", candidate);
+        message.put("from", from);
+        message.put("timestamp", System.currentTimeMillis());
+
+        // 학생/강사 양쪽 채널로 전송 (받는 쪽에서 필터링)
+        messagingTemplate.convertAndSend("/topic/screenshare/student/" + to, message);
+        messagingTemplate.convertAndSend("/topic/screenshare/instructor/" + to, message);
+    }
 }

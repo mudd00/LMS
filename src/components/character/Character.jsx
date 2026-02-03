@@ -44,6 +44,7 @@ function Character({ characterRef, initialPosition, isMovementDisabled, username
   const [isSitting, setIsSitting] = useState(false); // 앉기 상태
   const sittingPositionRef = useRef(null); // 앉은 위치
   const sittingRotationRef = useRef(null); // 앉은 방향
+  const sittingTypeRef = useRef(null); // 앉기 타입 ('sit' | 'stand')
 
   // modelPath 변경 감지
   useEffect(() => {
@@ -163,6 +164,7 @@ function Character({ characterRef, initialPosition, isMovementDisabled, username
 
         setIsSitting(true);
         sittingPositionRef.current = position;
+        sittingTypeRef.current = type; // 타입 저장
 
         // type에 따라 바라보는 방향 설정
         let targetRotation;
@@ -209,25 +211,38 @@ function Character({ characterRef, initialPosition, isMovementDisabled, username
       characterRef.current.stand = () => {
         if (!rigidBodyRef.current) return;
 
-        // 의자 옆으로 이동 (끼지 않도록)
         const currentPos = rigidBodyRef.current.translation();
-        rigidBodyRef.current.setTranslation(
-          { x: currentPos.x + 2, y: currentPos.y, z: currentPos.z }, // 옆으로 2 이동
-          true
-        );
 
         // RigidBody를 다시 dynamic으로 변경
         rigidBodyRef.current.setBodyType(0, true); // 0 = Dynamic
 
+        // 교탁(stand)에서는 같은 위치 유지, 의자(sit)에서는 옆으로 이동
+        if (sittingTypeRef.current === 'stand') {
+          // 교탁: 현재 위치 그대로 유지
+          rigidBodyRef.current.setTranslation(
+            { x: currentPos.x, y: currentPos.y, z: currentPos.z },
+            true
+          );
+          rigidBodyRef.current.setLinvel({ x: 0, y: 0, z: 0 }, true);
+        } else {
+          // 의자 옆으로 이동 (끼지 않도록)
+          rigidBodyRef.current.setTranslation(
+            { x: currentPos.x + 2, y: currentPos.y, z: currentPos.z },
+            true
+          );
+        }
+
         setIsSitting(false);
         sittingPositionRef.current = null;
         sittingRotationRef.current = null;
+        sittingTypeRef.current = null;
 
         console.log('🚶 일어서기 완료');
       };
 
       // 상태 확인 메서드
       characterRef.current.isSitting = () => isSitting;
+      characterRef.current.getSittingType = () => sittingTypeRef.current; // 'sit' | 'stand' | null
     }
   }, [characterRef, rigidBodyRef.current, modelGroupRef.current, isSitting]);
 
@@ -290,8 +305,8 @@ function Character({ characterRef, initialPosition, isMovementDisabled, username
 
     let animToPlay = 'Idle';
 
-    // 앉아있을 때는 SitDown 애니메이션
-    if (isSitting) {
+    // 앉아있을 때는 SitDown 애니메이션 (단, 교탁에서는 Idle 유지)
+    if (isSitting && sittingTypeRef.current !== 'stand') {
       animToPlay = 'SitDown';
     } else if (forward || backward || left || right) {
       animToPlay = shift ? 'Run' : 'Walk';

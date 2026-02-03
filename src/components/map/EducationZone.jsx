@@ -182,11 +182,11 @@ function EducationZone({ position = ZONE_CENTER, onBlackboardReady, onWhiteboard
         onNearChange={onInteractionChange}
       />
 
-      {/* 교탁 상호작용 영역 (테스트: 모든 역할 허용) */}
+      {/* 교탁 상호작용 영역 - 칠판 트리거와 동일한 영역 */}
       <InteractiveObject
-        position={[position[0] + 26, position[1] + 1, position[2] - 8]}
-        sittingPosition={[position[0] + 26, position[1] + 1, position[2] - 4]}
-        size={[6, 3, 6]}
+        position={[position[0], position[1] + 3, position[2] - 20]} // 칠판 트리거와 동일
+        sittingPosition={[position[0], position[1], position[2] - 15]} // 상호작용 영역 위치
+        size={[30, 10, 20]} // 칠판 트리거와 동일 크기
         objectId="edu-podium"
         label="교탁에 서기"
         type="stand"

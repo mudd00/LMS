@@ -40,6 +40,9 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ShopModal } from './features/shop';
 import { GoldChargeModal } from './features/payment';
 import { InventoryModal } from './features/inventory';
+import useScreenShare from './hooks/useScreenShare';
+import useScreenReceive from './hooks/useScreenReceive';
+import Screen from './components/education/Screen';
 
 
 function App() {
@@ -132,6 +135,33 @@ function App() {
 
   // 모달이 열려있는지 확인 (PhoneUI는 제외 - 게임플레이에 영향 없음)
   const isAnyModalOpen = showBoardModal || showProfileModal || showSettingModal || showEventModal || showMinigameModal || showShopModal || showInventoryModal || showGoldChargeModal || showLanding || showNotificationModal;
+
+  // 화면 공유 훅 (강사/개발자용)
+  const isInstructor = userRole === 'instructor' || userRole === 'developer';
+
+  // 디버그: userRole 확인
+  useEffect(() => {
+    console.log('🔍 userRole:', userRole, '| isInstructor:', isInstructor);
+  }, [userRole, isInstructor]);
+
+  const {
+    isSharing: isScreenSharing,
+    error: screenShareError,
+    viewerCount: screenShareViewerCount,
+    stream: instructorScreenStream,
+    startScreenShare,
+    stopScreenShare,
+  } = useScreenShare(multiplayerService, userId, isInstructor);
+
+  // 화면 수신 훅 (학생용)
+  const {
+    isReceiving: isReceivingScreenShare,
+    stream: receivedScreenStream,
+    instructorId: screenShareInstructorId,
+    isScreenShareAvailable,
+    startReceiving: startReceivingScreenShare,
+    stopReceiving: stopReceivingScreenShare,
+  } = useScreenReceive(multiplayerService, userId);
 
   // 캐릭터 현재 위치 업데이트 콜백
   const handleCharacterPositionUpdate = useCallback((position) => {
@@ -330,10 +360,16 @@ function App() {
     setUserId(user.id || String(Date.now()));
     setUserProfile(user); // 프로필 정보 저장 (selectedProfile, selectedOutline 포함)
 
-    // 역할 설정 (ROLE_DEVELOPER = instructor, 그 외 = student)
-    if (user.role === 'ROLE_DEVELOPER') {
-      setUserRole('instructor');
-      console.log('👨‍🏫 강사 역할로 로그인');
+    // 역할 설정 (ROLE_DEVELOPER = 모든 권한, ROLE_ADMIN = 관리자, 그 외 = student)
+    // user.role 또는 user.roles 배열에서 역할 확인
+    const userRoleValue = user.role || (user.roles && user.roles[0]) || '';
+    console.log('🔍 로그인 user.role 값:', userRoleValue, '| user 객체:', user);
+
+    if (userRoleValue === 'ROLE_DEVELOPER' || userRoleValue === 'ROLE_ADMIN' ||
+        user.email?.includes('dev') || user.username?.includes('dev')) {
+      // 개발자 계정이거나 dev가 포함된 이메일/유저명이면 개발자로 설정
+      setUserRole('developer');
+      console.log('🔧 개발자/관리자 역할로 로그인 (모든 권한)');
     } else {
       setUserRole('student');
       console.log('👨‍🎓 학생 역할로 로그인');
@@ -855,8 +891,8 @@ function App() {
 
     const { type, position, allowedRole } = nearInteraction;
 
-    // 역할 확인
-    if (allowedRole !== 'all' && allowedRole !== userRole) {
+    // 역할 확인 (developer는 모든 권한)
+    if (allowedRole !== 'all' && userRole !== 'developer' && allowedRole !== userRole) {
       const roleText = allowedRole === 'student' ? '학생' : '강사';
       setNotification({ message: `${roleText}만 사용할 수 있습니다.`, type: 'error' });
       return;
@@ -1053,10 +1089,12 @@ function App() {
             setUserId(validUser.id || String(Date.now()));
             setUserProfile(validUser);
 
-            // 역할 설정 (ROLE_DEVELOPER = instructor, 그 외 = student)
-            if (validUser.role === 'ROLE_DEVELOPER') {
-              setUserRole('instructor');
-              console.log('👨‍🏫 강사 역할로 자동 로그인');
+            // 역할 설정 (ROLE_DEVELOPER = 모든 권한, ROLE_ADMIN = 관리자, 그 외 = student)
+            const validUserRoleValue = validUser.role || (validUser.roles && validUser.roles[0]) || '';
+            if (validUserRoleValue === 'ROLE_DEVELOPER' || validUserRoleValue === 'ROLE_ADMIN' ||
+                validUser.email?.includes('dev') || validUser.username?.includes('dev')) {
+              setUserRole('developer'); // 개발자/관리자는 모든 역할 권한
+              console.log('🔧 개발자/관리자 역할로 자동 로그인 (모든 권한)');
             } else {
               setUserRole('student');
               console.log('👨‍🎓 학생 역할로 자동 로그인');
@@ -1230,16 +1268,40 @@ function App() {
         </div>
       )}
 
-      {/* 판서 컨트롤러 버튼 (칠판 근처에서만 표시) */}
-      {isLoggedIn && !isMapFull && showWhiteboardButton && (
-        <button
-          className="whiteboard-button"
-          onClick={() => setShowWhiteboardPopup(true)}
-          title="판서 컨트롤러"
-        >
-          <span className="whiteboard-button-icon">✏️</span>
-          <span className="whiteboard-button-text">판서</span>
-        </button>
+      {/* 판서 컨트롤러 버튼 (교탁에 서있을 때만 표시) */}
+      {isLoggedIn && !isMapFull && characterRef.current?.isSitting?.() && characterRef.current?.getSittingType?.() === 'stand' && (
+        <div className="podium-controls">
+          <button
+            className="whiteboard-button"
+            onClick={() => setShowWhiteboardPopup(true)}
+            title="판서 컨트롤러"
+          >
+            <span className="whiteboard-button-icon">✏️</span>
+            <span className="whiteboard-button-text">판서</span>
+          </button>
+          <button
+            className={`whiteboard-button screen-share-button ${isScreenSharing ? 'active' : ''}`}
+            onClick={async () => {
+              if (isScreenSharing) {
+                stopScreenShare();
+                setNotification({ message: '화면 공유가 종료되었습니다.', type: 'info' });
+              } else {
+                const success = await startScreenShare();
+                if (success) {
+                  setNotification({ message: '화면 공유가 시작되었습니다.', type: 'success' });
+                } else if (screenShareError) {
+                  setNotification({ message: screenShareError, type: 'error' });
+                }
+              }
+            }}
+            title={isScreenSharing ? '화면 공유 중지' : '화면 공유 시작'}
+          >
+            <span className="whiteboard-button-icon">{isScreenSharing ? '🔴' : '🖥️'}</span>
+            <span className="whiteboard-button-text">
+              {isScreenSharing ? `공유 중 (${screenShareViewerCount})` : '화면 공유'}
+            </span>
+          </button>
+        </div>
       )}
 
       {/* 상호작용 프롬프트 (의자/교탁 근처에서 F키) */}
@@ -1248,12 +1310,42 @@ function App() {
           <div className="interaction-prompt-key">F</div>
           <div className="interaction-prompt-text">
             {characterRef.current?.isSitting?.() ? '일어서기' : nearInteraction?.label}
-            {nearInteraction && !characterRef.current?.isSitting?.() && nearInteraction.allowedRole !== 'all' && nearInteraction.allowedRole !== userRole && (
+            {nearInteraction && !characterRef.current?.isSitting?.() && nearInteraction.allowedRole !== 'all' && userRole !== 'developer' && nearInteraction.allowedRole !== userRole && (
               <span className="interaction-prompt-role">
                 ({nearInteraction.allowedRole === 'student' ? '학생 전용' : '강사 전용'})
               </span>
             )}
           </div>
+        </div>
+      )}
+
+      {/* 화면 공유 알림 (학생용 - 화면 공유 시작 시 표시) */}
+      {isLoggedIn && !isMapFull && isScreenShareAvailable && !isInstructor && !isReceivingScreenShare && (
+        <div className="screen-share-notification">
+          <div className="screen-share-notification-content">
+            <span className="screen-share-notification-icon">🖥️</span>
+            <span className="screen-share-notification-text">강사가 화면을 공유하고 있습니다</span>
+            <button
+              className="screen-share-notification-button"
+              onClick={() => startReceivingScreenShare(screenShareInstructorId)}
+            >
+              시청하기
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 화면 공유 수신 중 알림 (학생용) */}
+      {isLoggedIn && !isMapFull && isReceivingScreenShare && (
+        <div className="screen-share-receiving">
+          <span className="screen-share-receiving-icon">📺</span>
+          <span className="screen-share-receiving-text">화면 공유 시청 중</span>
+          <button
+            className="screen-share-receiving-stop"
+            onClick={stopReceivingScreenShare}
+          >
+            시청 중지
+          </button>
         </div>
       )}
 
@@ -1370,6 +1462,18 @@ function App() {
                   onWhiteboardTriggerEnter={handleWhiteboardTriggerEnter}
                   onWhiteboardTriggerExit={handleWhiteboardTriggerExit}
                   onInteractionChange={handleInteractionChange}
+                />
+              )}
+
+              {/* 화면 공유 스크린 (칠판 위치에 표시) */}
+              {!isMapFull && (isReceivingScreenShare || isScreenSharing) && (
+                <Screen
+                  stream={isScreenSharing ? instructorScreenStream : receivedScreenStream}
+                  position={[84.78, 6.39, -121.5]}
+                  rotation={[0, 0, 0]}
+                  width={24}
+                  height={13.5}
+                  visible={isReceivingScreenShare || isScreenSharing}
                 />
               )}
             </Physics>

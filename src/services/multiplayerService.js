@@ -24,6 +24,10 @@ class MultiplayerService {
     this.pendingRoomChatSubscriptions = new Set(); // roomId set to subscribe on connect if subscribe requested earlier
     this.onConnectCallbacks = []; // 연결 성공 리스너
     this.roomSubscriptions = new Map(); // Track room subscriptions
+
+    // 화면 공유 관련 콜백
+    this.onScreenShareStartCallbacks = [];
+    this.onScreenShareStopCallbacks = [];
   }
   connect(userId, username, isObserver = false) {
     // 이미 연결되어 있으면 재연결하지 않음
@@ -119,6 +123,17 @@ class MultiplayerService {
           const rooms = JSON.parse(message.body);
           console.log('📜 방 목록 실시간 업데이트:', rooms.length, 'rooms');
           this.onRoomListUpdateCallbacks.forEach(cb => cb?.(rooms));
+        });
+
+        // Subscribe to screen share broadcast (화면 공유 시작/종료 알림)
+        this.client.subscribe('/topic/screenshare/broadcast', (message) => {
+          const data = JSON.parse(message.body);
+          console.log('🖥️ 화면 공유 브로드캐스트:', data);
+          if (data.action === 'start') {
+            this.onScreenShareStartCallbacks.forEach(cb => cb?.(data));
+          } else if (data.action === 'stop') {
+            this.onScreenShareStopCallbacks.forEach(cb => cb?.(data));
+          }
         });
 
         // room chat subscriptions map initialization
@@ -763,6 +778,135 @@ class MultiplayerService {
         this.onConnectCallbacks = this.onConnectCallbacks.filter(cb => cb !== callback);
       };
     }
+  }
+
+  // ==================== 화면 공유 관련 메서드 ====================
+
+  // 화면 공유 시작 리스너
+  onScreenShareStart(callback) {
+    if (callback) {
+      this.onScreenShareStartCallbacks.push(callback);
+      return () => {
+        this.onScreenShareStartCallbacks = this.onScreenShareStartCallbacks.filter(cb => cb !== callback);
+      };
+    }
+  }
+
+  // 화면 공유 종료 리스너
+  onScreenShareStop(callback) {
+    if (callback) {
+      this.onScreenShareStopCallbacks.push(callback);
+      return () => {
+        this.onScreenShareStopCallbacks = this.onScreenShareStopCallbacks.filter(cb => cb !== callback);
+      };
+    }
+  }
+
+  // 화면 공유 시작 브로드캐스트
+  sendScreenShareStart(instructorId) {
+    if (!this.connected || !this.client || !this.client.active) {
+      console.warn('WebSocket 연결되지 않음 - 화면 공유 시작 브로드캐스트 불가');
+      return;
+    }
+
+    this.client.publish({
+      destination: '/app/screenshare.start',
+      body: JSON.stringify({
+        instructorId: instructorId,
+        action: 'start'
+      })
+    });
+    console.log('🖥️ 화면 공유 시작 브로드캐스트 전송');
+  }
+
+  // 화면 공유 종료 브로드캐스트
+  sendScreenShareStop(instructorId) {
+    if (!this.connected || !this.client || !this.client.active) {
+      console.warn('WebSocket 연결되지 않음 - 화면 공유 종료 브로드캐스트 불가');
+      return;
+    }
+
+    this.client.publish({
+      destination: '/app/screenshare.stop',
+      body: JSON.stringify({
+        instructorId: instructorId,
+        action: 'stop'
+      })
+    });
+    console.log('🖥️ 화면 공유 종료 브로드캐스트 전송');
+  }
+
+  // WebRTC 시그널링: 학생 시청 요청
+  sendScreenShareJoin(studentId, instructorId) {
+    if (!this.connected || !this.client || !this.client.active) return;
+
+    this.client.publish({
+      destination: '/app/screenshare.join',
+      body: JSON.stringify({
+        studentId: studentId,
+        instructorId: instructorId,
+        type: 'join'
+      })
+    });
+  }
+
+  // WebRTC 시그널링: 학생 시청 종료
+  sendScreenShareLeave(studentId, instructorId) {
+    if (!this.connected || !this.client || !this.client.active) return;
+
+    this.client.publish({
+      destination: '/app/screenshare.leave',
+      body: JSON.stringify({
+        studentId: studentId,
+        instructorId: instructorId,
+        type: 'leave'
+      })
+    });
+  }
+
+  // WebRTC 시그널링: Offer 전송 (강사 -> 학생)
+  sendScreenShareOffer(fromId, toId, offer) {
+    if (!this.connected || !this.client || !this.client.active) return;
+
+    this.client.publish({
+      destination: '/app/screenshare.offer',
+      body: JSON.stringify({
+        from: fromId,
+        to: toId,
+        offer: offer,
+        type: 'offer'
+      })
+    });
+  }
+
+  // WebRTC 시그널링: Answer 전송 (학생 -> 강사)
+  sendScreenShareAnswer(studentId, instructorId, answer) {
+    if (!this.connected || !this.client || !this.client.active) return;
+
+    this.client.publish({
+      destination: '/app/screenshare.answer',
+      body: JSON.stringify({
+        studentId: studentId,
+        instructorId: instructorId,
+        answer: answer,
+        type: 'answer'
+      })
+    });
+  }
+
+  // WebRTC 시그널링: ICE Candidate 전송
+  sendScreenShareIce(fromId, toId, candidate) {
+    if (!this.connected || !this.client || !this.client.active) return;
+
+    this.client.publish({
+      destination: '/app/screenshare.ice',
+      body: JSON.stringify({
+        from: fromId,
+        to: toId,
+        candidate: candidate,
+        type: 'ice'
+      })
+    });
   }
 }
 
